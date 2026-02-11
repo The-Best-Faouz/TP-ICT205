@@ -7,6 +7,9 @@ from django.urls import path, include  # Ajoutez 'include'
 from django.conf import settings
 from django.conf.urls.static import static
 
+handler404 = "voitures.views.handler404"
+handler500 = "voitures.views.handler500"
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('voitures.urls')),  # Ajoutez cette ligne

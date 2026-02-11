@@ -38,6 +38,9 @@ env\Scripts\activate     # Windows
 # Installer les dépendances
 pip install -r requirements.txt
 
+# Variables d'environnement (optionnel)
+# cp .env.example .env  (puis adaptez SECRET_KEY / DEBUG / DATABASE_URL)
+
 # Configurer la base de données
 python manage.py migrate
 

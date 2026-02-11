@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
     Marque, Modele, Voiture, ImageVoiture, 
-    Favori, Avis, Transaction, Message
+    Favori, Avis, Transaction, Message, Notification
 )
 
 class ImageVoitureInline(admin.TabularInline):
@@ -156,3 +156,11 @@ class MessageAdmin(admin.ModelAdmin):
         queryset.update(lu=False)
         self.message_user(request, f"{queryset.count()} messages marqués comme non lus.")
     marquer_comme_non_lu.short_description = "Marquer comme non lu"
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ["utilisateur", "type", "titre", "lu", "date_creation"]
+    list_filter = ["type", "lu", "date_creation"]
+    search_fields = ["utilisateur__username", "titre", "contenu"]
+    readonly_fields = ["date_creation"]

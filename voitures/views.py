@@ -7,9 +7,37 @@ from django.contrib import messages
 from django.db.models import Q, Count, Avg, Sum
 from django.core.paginator import Paginator
 from django.http import HttpResponse
+from django.views.decorators.http import require_POST
 import os
-from .models import Marque, Modele, Voiture, Favori, Transaction, Avis
-from .forms import InscriptionForm
+from .models import Marque, Modele, Voiture, Favori, Transaction, Avis, Message, Notification
+from .forms import InscriptionForm, AvisForm
+
+
+def _validate_uploaded_image(uploaded_file):
+    if not uploaded_file:
+        return None
+    max_bytes = 5 * 1024 * 1024  # 5MB
+    if uploaded_file.size and uploaded_file.size > max_bytes:
+        return "Image trop volumineuse (max 5MB)."
+    content_type = getattr(uploaded_file, "content_type", "") or ""
+    allowed = {"image/jpeg", "image/png", "image/webp"}
+    if content_type and content_type.lower() not in allowed:
+        return "Format d'image non supporté (JPG, PNG, WEBP)."
+    return None
+
+
+def _staff_users():
+    return User.objects.filter(is_staff=True, is_active=True)
+
+
+def _notify(users, *, type, titre, contenu="", url=""):
+    notifications = [
+        Notification(utilisateur=user, type=type, titre=titre, contenu=contenu, url=url)
+        for user in users
+        if user and getattr(user, "is_active", False)
+    ]
+    if notifications:
+        Notification.objects.bulk_create(notifications)
 
 # ==================== VUES PUBLIQUES ====================
 
@@ -25,6 +53,8 @@ def accueil(request):
         'voitures_recentes': voitures_recentes,
         'voitures_promo': voitures_promo,
         'marques_populaires': marques_populaires,
+        'marques': Marque.objects.all().order_by('nom'),
+        'voitures_vedette': Voiture.objects.filter(est_vendue=False).select_related('modele__marque').order_by('-date_ajout')[:12],
         'total_voitures': Voiture.objects.filter(est_vendue=False).count(),
     }
     return render(request, 'voitures/accueil.html', context)
@@ -34,6 +64,10 @@ def liste_voitures(request):
     voitures_list = Voiture.objects.filter(est_vendue=False).select_related(
         'modele__marque', 'vendeur'
     ).prefetch_related('favoris')
+
+    q = request.GET.get("q")
+    sort = request.GET.get("sort")
+    statut = request.GET.get("statut")
     
     # Récupération des filtres
     marque_id = request.GET.get('marque')
@@ -41,6 +75,13 @@ def liste_voitures(request):
     prix_max = request.GET.get('prix_max')
     annee_min = request.GET.get('annee_min')
     annee_max = request.GET.get('annee_max')
+
+    if q:
+        voitures_list = voitures_list.filter(
+            Q(modele__nom__icontains=q)
+            | Q(modele__marque__nom__icontains=q)
+            | Q(description__icontains=q)
+        )
     
     # Application des filtres
     if marque_id:
@@ -57,6 +98,20 @@ def liste_voitures(request):
     
     if annee_max:
         voitures_list = voitures_list.filter(annee__lte=annee_max)
+
+    if statut == "reservee":
+        voitures_list = voitures_list.filter(est_reservee=True)
+    elif statut == "disponible":
+        voitures_list = voitures_list.filter(est_reservee=False)
+
+    if sort == "prix_asc":
+        voitures_list = voitures_list.order_by("prix")
+    elif sort == "prix_desc":
+        voitures_list = voitures_list.order_by("-prix")
+    elif sort == "annee_desc":
+        voitures_list = voitures_list.order_by("-annee")
+    elif sort == "km_asc":
+        voitures_list = voitures_list.order_by("kilometrage")
     
     # Pagination
     paginator = Paginator(voitures_list, 12)
@@ -75,6 +130,9 @@ def liste_voitures(request):
         'annee_min': annee_min,
         'annee_max': annee_max,
         'prix_moyen': prix_moyen,
+        'q': q,
+        'sort': sort,
+        'statut': statut,
     }
     return render(request, 'voitures/liste_voitures.html', context)
 
@@ -83,6 +141,10 @@ def detail_voiture(request, voiture_id):
     voiture = get_object_or_404(Voiture.objects.select_related(
         'modele__marque', 'vendeur'
     ), id=voiture_id)
+
+    if request.method == "GET":
+        if not request.user.is_authenticated or request.user != voiture.vendeur:
+            voiture.incrementer_vue()
     
     # Vérifier si l'utilisateur a cette voiture en favoris
     est_favori = False
@@ -106,6 +168,7 @@ def detail_voiture(request, voiture_id):
         'est_favori': est_favori,
         'avis': avis,
         'voitures_similaires': voitures_similaires,
+        'avis_form': AvisForm(),
     }
     return render(request, 'voitures/detail_voiture.html', context)
 
@@ -202,10 +265,29 @@ def ajouter_voiture(request):
             
             # Gestion de l'image
             if 'image' in request.FILES:
+                error = _validate_uploaded_image(request.FILES["image"])
+                if error:
+                    messages.error(request, error)
+                    voiture.delete()
+                    return redirect("ajouter_voiture")
                 voiture.image_principale = request.FILES['image']
                 voiture.save()
             
             messages.success(request, 'Votre annonce a été publiée avec succès !')
+            _notify(
+                _staff_users(),
+                type="new_listing",
+                titre="Nouvelle annonce publiée",
+                contenu=f"{request.user.username} a publié l'annonce #{voiture.id}.",
+                url=voiture.get_absolute_url(),
+            )
+            _notify(
+                User.objects.filter(is_active=True).exclude(id=request.user.id),
+                type="new_listing",
+                titre="Nouvelle voiture disponible",
+                contenu=f"{voiture.modele.marque.nom} {voiture.modele.nom} ({voiture.annee}).",
+                url=voiture.get_absolute_url(),
+            )
             return redirect('detail_voiture', voiture_id=voiture.id)
             
         except Exception as e:
@@ -242,6 +324,10 @@ def modifier_voiture(request, voiture_id):
             
             # Gestion de l'image
             if 'image' in request.FILES:
+                error = _validate_uploaded_image(request.FILES["image"])
+                if error:
+                    messages.error(request, error)
+                    return redirect('modifier_voiture', voiture_id=voiture.id)
                 voiture.image_principale = request.FILES['image']
             
             voiture.save()
@@ -279,6 +365,8 @@ def supprimer_voiture(request, voiture_id):
 @login_required
 def toggle_favori(request, voiture_id):
     """Ajouter/retirer une voiture des favoris"""
+    if request.method != "POST":
+        return redirect('detail_voiture', voiture_id=voiture_id)
     voiture = get_object_or_404(Voiture, id=voiture_id)
     
     # Vérifier si déjà en favori
@@ -295,6 +383,89 @@ def toggle_favori(request, voiture_id):
     
     return redirect('detail_voiture', voiture_id=voiture_id)
 
+
+@login_required
+@require_POST
+def ajouter_avis(request, voiture_id):
+    voiture = get_object_or_404(Voiture, id=voiture_id)
+    if request.user == voiture.vendeur:
+        messages.error(request, "Vous ne pouvez pas noter votre propre annonce.")
+        return redirect("detail_voiture", voiture_id=voiture_id)
+
+    form = AvisForm(request.POST)
+    if form.is_valid():
+        avis, created = Avis.objects.get_or_create(
+            voiture=voiture,
+            utilisateur=request.user,
+            defaults={
+                "note": form.cleaned_data["note"],
+                "commentaire": form.cleaned_data["commentaire"],
+                "approuve": False,
+            },
+        )
+        if not created:
+            avis.note = form.cleaned_data["note"]
+            avis.commentaire = form.cleaned_data["commentaire"]
+            avis.approuve = False
+            avis.save(update_fields=["note", "commentaire", "approuve"])
+        messages.success(request, "Avis envoyé. Il sera visible après validation.")
+    else:
+        messages.error(request, "Avis invalide. Vérifiez les champs.")
+    return redirect("detail_voiture", voiture_id=voiture_id)
+
+
+@login_required
+@require_POST
+def envoyer_message(request, voiture_id):
+    voiture = get_object_or_404(Voiture.objects.select_related("vendeur", "modele__marque", "modele"), id=voiture_id)
+    if request.user == voiture.vendeur:
+        messages.error(request, "Vous ne pouvez pas vous envoyer un message à vous-même.")
+        return redirect("detail_voiture", voiture_id=voiture_id)
+
+    contenu = (request.POST.get("contenu") or "").strip()
+    if not contenu:
+        messages.error(request, "Message vide.")
+        return redirect("detail_voiture", voiture_id=voiture_id)
+
+    Message.objects.create(
+        expediteur=request.user,
+        destinataire=voiture.vendeur,
+        sujet=f"Annonce #{voiture.id} — {voiture.modele.marque.nom} {voiture.modele.nom}",
+        contenu=contenu,
+    )
+    _notify(
+        [voiture.vendeur],
+        type="message",
+        titre="Nouveau message",
+        contenu=f"Message reçu pour l'annonce #{voiture.id}.",
+        url=voiture.get_absolute_url(),
+    )
+    messages.success(request, "Message envoyé au vendeur.")
+    return redirect("detail_voiture", voiture_id=voiture_id)
+
+
+@login_required
+def mes_messages(request):
+    recus = Message.objects.filter(destinataire=request.user).select_related("expediteur").order_by("-date_envoi")
+    envoyes = Message.objects.filter(expediteur=request.user).select_related("destinataire").order_by("-date_envoi")
+
+    tab = request.GET.get("tab", "recus")
+    if tab not in {"recus", "envoyes"}:
+        tab = "recus"
+
+    if tab == "recus":
+        Message.objects.filter(destinataire=request.user, lu=False).update(lu=True)
+
+    context = {"recus": recus, "envoyes": envoyes, "tab": tab}
+    return render(request, "voitures/mes_messages.html", context)
+
+
+@login_required
+def notifications(request):
+    items = Notification.objects.filter(utilisateur=request.user).order_by("-date_creation")[:200]
+    Notification.objects.filter(utilisateur=request.user, lu=False).update(lu=True)
+    return render(request, "voitures/notifications.html", {"items": items})
+
 @login_required
 def acheter_voiture(request, voiture_id):
     """Processus d'achat d'une voiture"""
@@ -302,6 +473,10 @@ def acheter_voiture(request, voiture_id):
     
     if request.user == voiture.vendeur:
         messages.error(request, 'Vous ne pouvez pas acheter votre propre voiture.')
+        return redirect('detail_voiture', voiture_id=voiture_id)
+
+    if voiture.est_reservee:
+        messages.info(request, "Cette voiture est déjà réservée.")
         return redirect('detail_voiture', voiture_id=voiture_id)
     
     if request.method == 'POST':
@@ -315,9 +490,24 @@ def acheter_voiture(request, voiture_id):
                 statut='en_attente'
             )
             
-            # Marquer la voiture comme vendue
-            voiture.est_vendue = True
+            # Réserver la voiture (en attente de confirmation du vendeur)
+            voiture.est_reservee = True
             voiture.save()
+
+            _notify(
+                [voiture.vendeur],
+                type="purchase_request",
+                titre="Nouvelle demande d'achat",
+                contenu=f"{request.user.username} a demandé à acheter l'annonce #{voiture.id}.",
+                url=voiture.get_absolute_url(),
+            )
+            _notify(
+                _staff_users(),
+                type="purchase_request",
+                titre="Demande d'achat à traiter",
+                contenu=f"Annonce #{voiture.id} — {voiture.modele.marque.nom} {voiture.modele.nom}.",
+                url="/dashboard/",
+            )
             
             messages.success(request, 
                 'Votre demande d\'achat a été envoyée au vendeur. '
@@ -388,9 +578,32 @@ def confirmer_vente(request, transaction_id):
         vendeur=request.user,
         statut='en_attente'
     )
+
+    if request.method != "POST":
+        return redirect('mes_ventes')
     
     transaction.statut = 'confirmee'
     transaction.save()
+
+    voiture = transaction.voiture
+    voiture.est_vendue = True
+    voiture.est_reservee = False
+    voiture.save(update_fields=["est_vendue", "est_reservee"])
+
+    _notify(
+        [transaction.acheteur],
+        type="sale_confirmed",
+        titre="Vente confirmée",
+        contenu=f"Votre achat pour l'annonce #{voiture.id} a été confirmé.",
+        url=voiture.get_absolute_url(),
+    )
+    _notify(
+        _staff_users(),
+        type="sale_confirmed",
+        titre="Vente confirmée",
+        contenu=f"Annonce #{voiture.id} — transaction #{transaction.id} confirmée.",
+        url="/dashboard/",
+    )
     
     messages.success(request, 'Vente confirmée avec succès !')
     return redirect('mes_ventes')
@@ -415,11 +628,17 @@ def dashboard(request):
     transactions_recentes = Transaction.objects.select_related(
         'voiture', 'acheteur', 'vendeur'
     ).order_by('-date_transaction')[:10]
+
+    transactions_en_attente = Transaction.objects.filter(statut="en_attente").select_related(
+        "voiture", "acheteur", "vendeur"
+    ).order_by("-date_transaction")[:10]
     
     # Voitures récentes
     voitures_recentes = Voiture.objects.select_related(
         'modele__marque', 'vendeur'
     ).order_by('-date_ajout')[:10]
+
+    notifications_recentes = Notification.objects.filter(utilisateur=request.user).order_by("-date_creation")[:10]
     
     context = {
         'total_utilisateurs': total_utilisateurs,
@@ -427,7 +646,9 @@ def dashboard(request):
         'total_transactions': total_transactions,
         'chiffre_affaires': chiffre_affaires,
         'transactions_recentes': transactions_recentes,
+        'transactions_en_attente': transactions_en_attente,
         'voitures_recentes': voitures_recentes,
+        'notifications_recentes': notifications_recentes,
     }
     return render(request, 'admin/dashboard.html', context)
 

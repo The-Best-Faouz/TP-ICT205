@@ -98,6 +98,7 @@ class Voiture(models.Model):
     date_modification = models.DateTimeField(auto_now=True)
     vendeur = models.ForeignKey(User, on_delete=models.CASCADE, related_name='voitures_vendues')
     est_vendue = models.BooleanField(default=False)
+    est_reservee = models.BooleanField(default=False)
     image_principale = models.ImageField(
         upload_to='voitures/', 
         default='voitures/default.jpg',
@@ -121,7 +122,7 @@ class Voiture(models.Model):
         if self.prix is None:
             return "Prix non défini"
         try:
-            return f"{float(self.prix):,.0f} €".replace(",", " ")
+            return f"{float(self.prix):,.0f} FCFA".replace(",", " ")
         except (TypeError, ValueError):
             return "Prix invalide"
     
@@ -254,3 +255,28 @@ class Message(models.Model):
     def marquer_comme_lu(self):
         self.lu = True
         self.save()
+
+
+class Notification(models.Model):
+    TYPE_CHOICES = [
+        ("new_listing", "Nouvelle annonce"),
+        ("purchase_request", "Demande d'achat"),
+        ("sale_confirmed", "Vente confirmée"),
+        ("message", "Message"),
+    ]
+
+    utilisateur = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+    type = models.CharField(max_length=30, choices=TYPE_CHOICES)
+    titre = models.CharField(max_length=200)
+    contenu = models.TextField(blank=True)
+    url = models.CharField(max_length=300, blank=True)
+    date_creation = models.DateTimeField(auto_now_add=True)
+    lu = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-date_creation"]
+        verbose_name = "Notification"
+        verbose_name_plural = "Notifications"
+
+    def __str__(self):
+        return f"{self.utilisateur.username}: {self.titre}"

@@ -6,8 +6,7 @@ services:
     region: frankfurt  # ou virginia, oregon, singapore
     plan: free
     buildCommand: |
-      pip install -r requirements.txt
-      python manage.py collectstatic --noinput
+      bash build.sh
     startCommand: gunicorn config.wsgi:application
     healthCheckPath: /
     envVars:

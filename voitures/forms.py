@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import PasswordResetForm, SetPasswordForm
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from .models import Voiture, Avis, Marque  # AJOUTEZ Marque ICI
@@ -8,24 +9,37 @@ class InscriptionForm(UserCreationForm):
     first_name = forms.CharField(
         max_length=30, 
         required=True,
-        widget=forms.TextInput(attrs={'placeholder': 'Prénom'})
+        widget=forms.TextInput(attrs={'placeholder': 'Prénom', 'class': 'form-control'})
     )
     last_name = forms.CharField(
         max_length=30, 
         required=True,
-        widget=forms.TextInput(attrs={'placeholder': 'Nom'})
+        widget=forms.TextInput(attrs={'placeholder': 'Nom', 'class': 'form-control'})
     )
     email = forms.EmailField(
         required=True,
-        widget=forms.EmailInput(attrs={'placeholder': 'Email'})
+        widget=forms.EmailInput(attrs={'placeholder': 'Email', 'class': 'form-control'})
     )
     
     class Meta:
         model = User
         fields = ['first_name', 'last_name', 'username', 'email', 'password1', 'password2']
         widgets = {
-            'username': forms.TextInput(attrs={'placeholder': 'Nom d\'utilisateur'}),
+            'username': forms.TextInput(attrs={'placeholder': 'Nom d\'utilisateur', 'class': 'form-control'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ("password1", "password2"):
+            field = self.fields.get(name)
+            if not field:
+                continue
+            existing = dict(field.widget.attrs)
+            field.widget.attrs = {
+                **existing,
+                "class": (existing.get("class", "") + " form-control").strip(),
+                "placeholder": existing.get("placeholder", "Mot de passe"),
+            }
     
     def clean_email(self):
         email = self.cleaned_data.get('email')
@@ -94,9 +108,10 @@ class AvisForm(forms.ModelForm):
         widgets = {
             'commentaire': forms.Textarea(attrs={
                 'rows': 4,
-                'placeholder': 'Donnez votre avis sur cette voiture...'
+                'placeholder': 'Donnez votre avis sur cette voiture...',
+                'class': 'form-control',
             }),
-            'note': forms.Select(choices=[(i, i) for i in range(1, 6)])
+            'note': forms.Select(choices=[(i, i) for i in range(1, 6)], attrs={'class': 'form-select'})
         }
 
 class RechercheForm(forms.Form):
@@ -159,3 +174,18 @@ class ContactForm(forms.Form):
         'rows': 5,
         'class': 'form-control'
     }))
+
+
+class PasswordResetEmailForm(PasswordResetForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"].widget.attrs.update(
+            {"class": "form-control", "placeholder": "Votre email"}
+        )
+
+
+class SetPasswordStyledForm(SetPasswordForm):
+    def __init__(self, user, *args, **kwargs):
+        super().__init__(user, *args, **kwargs)
+        for name in ("new_password1", "new_password2"):
+            self.fields[name].widget.attrs.update({"class": "form-control"})

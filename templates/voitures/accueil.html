@@ -1,219 +1,288 @@
 {% extends 'base.html' %}
+{% load static %}
+{% load currency %}
 
 {% block title %}Accueil - AutoMarket{% endblock %}
+{% block body_class %}home{% endblock %}
+{% block main_class %}p-0{% endblock %}
 
 {% block content %}
-<!-- Section Hero avec animation -->
-<div class="hero-section text-center py-5 bg-gradient-primary rounded mb-5 animate__animated animate__fadeIn" 
-     style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-    <div class="container">
-        <h1 class="display-4 text-white fw-bold animate__animated animate__bounceIn animate__delay-1s">
-            🚗 Bienvenue sur AutoMarket
+<section class="home-hero" style="--home-hero-bg: url('{% static 'img/home-hero-bg.jpg' %}');">
+  <div class="container content py-5">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-7">
+        <div class="hero-badges d-flex flex-wrap gap-2 mb-3 reveal-up">
+          <span class="badge rounded-pill px-3 py-2"><i class="fa-solid fa-shield-halved me-2"></i>Offres vérifiées</span>
+          <span class="badge rounded-pill px-3 py-2"><i class="fa-solid fa-magnifying-glass me-2"></i>Recherche rapide</span>
+          <span class="badge rounded-pill px-3 py-2"><i class="fa-regular fa-heart me-2"></i>Favoris</span>
+        </div>
+
+        <h1 class="display-4 fw-semibold text-white hero-title mb-3 reveal-up delay-1">
+          Trouvez votre prochaine voiture
         </h1>
-        <p class="lead text-light fs-4 animate__animated animate__fadeInUp animate__delay-2s">
-            Trouvez la voiture de vos rêves parmi notre large sélection
+        <p class="lead hero-subtitle mb-4 reveal-up delay-2">
+          Une expérience simple et premium: annonces claires, filtres rapides, favoris, et achat en ligne.
         </p>
-        <a href="{% url 'liste_voitures' %}" 
-           class="btn btn-warning btn-lg shadow-lg animate__animated animate__pulse animate__infinite"
-           style="animation-duration: 2s;">
-            🔍 Voir toutes les voitures
-        </a>
-    </div>
-</div>
 
-<!-- Marques populaires -->
-<section class="mb-5">
-    <h2 class="mb-4 text-primary fw-bold border-bottom pb-2">
-        <i class="fas fa-crown text-warning"></i> Marques populaires
-    </h2>
-    <div class="row">
-        {% for marque in marques_populaires %}
-        <div class="col-md-3 col-6 mb-3">
-            <div class="card text-center h-100 shadow-sm border-0 hover-card animate__animated animate__fadeInUp"
-                 style="animation-delay: {{ forloop.counter0|add:0.1 }}s;">
-                <div class="card-body py-4">
-                    {% if marque.logo %}
-                    <img src="{{ marque.logo.url }}" alt="{{ marque.nom }}" 
-                         class="img-fluid mb-3 brand-logo" 
-                         style="max-height: 60px; transition: transform 0.3s;">
-                    {% endif %}
-                    <h5 class="card-title text-dark fw-bold">{{ marque.nom }}</h5>
-                    <p class="card-text">
-                        <span class="badge bg-info text-dark">
-                            <i class="fas fa-globe"></i> {{ marque.pays }}
-                        </span>
-                    </p>
-                </div>
-            </div>
+        <div class="hero-actions d-flex flex-wrap gap-2 reveal-up delay-3">
+          <a class="btn btn-primary btn-lg" href="{% url 'liste_voitures' %}">
+            <i class="fa-solid fa-magnifying-glass me-2"></i> Explorer
+          </a>
+          {% if user.is_authenticated %}
+            <a class="btn btn-outline-light btn-lg" href="{% url 'ajouter_voiture' %}">
+              <i class="fa-solid fa-plus me-2"></i> Publier
+            </a>
+          {% else %}
+            <a class="btn btn-outline-light btn-lg" href="{% url 'inscription' %}">
+              Créer un compte
+            </a>
+          {% endif %}
         </div>
-        {% endfor %}
+
+        <div class="hero-kpis p-3 p-md-4 mt-4 reveal-up delay-4">
+          <div class="row g-3">
+            <div class="col-4">
+              <div class="label small mb-1">Disponibles</div>
+              <div class="h4 mb-0 value">{{ total_voitures }}</div>
+            </div>
+            <div class="col-4">
+              <div class="label small mb-1">Marques</div>
+              <div class="h4 mb-0 value">{{ marques_populaires|length }}</div>
+            </div>
+            <div class="col-4">
+              <div class="label small mb-1">Nouveautés</div>
+              <div class="h4 mb-0 value">{{ voitures_recentes|length }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 reveal-up delay-4">
+          <div class="am-card am-form-card p-3 p-md-4" style="background: rgba(255,255,255,0.92);">
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+              <div class="fw-semibold">Recherche rapide</div>
+              <span class="small text-secondary">Trouver une voiture en 10s</span>
+            </div>
+            <form class="row g-2" method="get" action="{% url 'liste_voitures' %}">
+              <div class="col-md-5">
+                <label class="form-label small mb-1" for="hero_marque">Marque</label>
+                <select class="form-select" id="hero_marque" name="marque">
+                  <option value="">Toutes</option>
+                  {% for marque in marques %}
+                    <option value="{{ marque.id }}">{{ marque.nom }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-3 col-6">
+                <label class="form-label small mb-1" for="hero_prix_min">Prix min</label>
+                <input class="form-control" id="hero_prix_min" name="prix_min" type="number" min="0" placeholder="0">
+              </div>
+              <div class="col-md-3 col-6">
+                <label class="form-label small mb-1" for="hero_prix_max">Prix max</label>
+                <input class="form-control" id="hero_prix_max" name="prix_max" type="number" min="0" placeholder="30000">
+              </div>
+              <div class="col-md-1 d-grid">
+                <label class="form-label small mb-1 d-none d-md-block">&nbsp;</label>
+                <button class="btn btn-primary" type="submit" aria-label="Rechercher">
+                  <i class="fa-solid fa-arrow-right"></i>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="vstack gap-3">
+          <div class="float-card p-3 p-md-4 reveal-up delay-2">
+            <div class="d-flex align-items-center justify-content-between gap-3">
+              <div>
+                <div class="small text-secondary">Astuce</div>
+                <div class="fw-semibold">Utilisez les filtres pour aller plus vite</div>
+              </div>
+              <div class="brand-mark"><i class="fa-solid fa-sliders"></i></div>
+            </div>
+            <div class="small text-secondary mt-2">Marque, prix et année — tout est prêt.</div>
+          </div>
+
+          <div class="float-card p-3 p-md-4 delay-1 reveal-up delay-3">
+            <div class="d-flex align-items-center justify-content-between gap-3">
+              <div>
+                <div class="small text-secondary">Sécurité</div>
+                <div class="fw-semibold">Transactions suivies dans votre espace</div>
+              </div>
+              <div class="brand-mark"><i class="fa-solid fa-receipt"></i></div>
+            </div>
+            <div class="small text-secondary mt-2">Consultez achats et ventes à tout moment.</div>
+          </div>
+
+          <div class="float-card p-3 p-md-4 delay-2 reveal-up delay-4">
+            <div class="d-flex align-items-center justify-content-between gap-3">
+              <div>
+                <div class="small text-secondary">Visuel</div>
+                <div class="fw-semibold">De belles photos rendent une annonce pro</div>
+              </div>
+              <div class="brand-mark"><i class="fa-solid fa-camera"></i></div>
+            </div>
+            <div class="small text-secondary mt-2">Ajoutez 6 à 10 photos pour maximiser l’intérêt.</div>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 </section>
 
-<!-- Voitures récentes -->
-<section class="mb-5">
-    <h2 class="mb-4 text-success fw-bold border-bottom pb-2">
-        <i class="fas fa-rocket text-success"></i> Nouveautés
-    </h2>
-    <div class="row">
-        {% for voiture in voitures_recentes %}
-        <div class="col-md-4 mb-4">
-            <div class="card h-100 shadow-lg border-0 hover-card animate__animated animate__fadeInUp"
-                 style="animation-delay: {{ forloop.counter0|add:0.2 }}s;">
-                <div class="position-relative overflow-hidden">
-                    <div class="card-img-overlay">
-                        <span class="badge bg-success bg-gradient">Nouveau</span>
-                    </div>
-                    <img src="{{ voiture.image_principale.url }}" 
-                         class="card-img-top car-image" 
-                         alt="{{ voiture.modele }}" 
-                         style="height: 200px; object-fit: cover; transition: transform 0.5s;">
-                </div>
-                <div class="card-body">
-                    <h5 class="card-title text-dark fw-bold">
-                        <i class="fas fa-car text-primary"></i> 
-                        {{ voiture.modele.marque.nom }} {{ voiture.modele.nom }}
-                    </h5>
-                    <p class="card-text">
-                        <strong class="text-success fs-4">{{ voiture.prix }} €</strong><br>
-                        <span class="badge bg-light text-dark">
-                            <i class="fas fa-calendar-alt"></i> {{ voiture.annee }}
-                        </span>
-                        <span class="badge bg-light text-dark ms-1">
-                            <i class="fas fa-road"></i> {{ voiture.kilometrage }} km
-                        </span>
-                    </p>
-                </div>
-                <div class="card-footer bg-white border-top-0">
-                    <a href="{% url 'detail_voiture' voiture.id %}" 
-                       class="btn btn-outline-success btn-sm w-100 pulse-button">
-                        <i class="fas fa-search"></i> Voir détails
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
+<section class="container py-5">
+  <div class="d-flex align-items-end justify-content-between gap-3 mb-3">
+    <div>
+      <h2 class="h4 mb-1 home-section-title">À la une</h2>
+      <p class="am-muted mb-0">Toutes les voitures avec photos (dernières annonces).</p>
     </div>
-</section>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'liste_voitures' %}">Voir tout</a>
+  </div>
 
-<!-- Voitures en promo -->
-<section>
-    <h2 class="mb-4 text-danger fw-bold border-bottom pb-2">
-        <i class="fas fa-bolt text-warning"></i> Bonnes affaires
-    </h2>
-    <div class="row">
-        {% for voiture in voitures_promo %}
-        <div class="col-md-4 mb-4">
-            <div class="card h-100 border-danger shadow-lg promo-card animate__animated animate__pulse"
-                 style="animation-delay: {{ forloop.counter0|add:0.3 }}s;">
-                <div class="card-header bg-danger bg-gradient text-white">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-fire fa-spin me-2"></i>
-                        <span class="fw-bold">🔥 PROMOTION EXCEPTIONNELLE</span>
-                    </div>
-                </div>
-                <div class="position-relative overflow-hidden">
-                    <img src="{{ voiture.image_principale.url }}" 
-                         class="card-img-top car-image" 
-                         alt="{{ voiture.modele }}" 
-                         style="height: 200px; object-fit: cover; transition: transform 0.5s;">
-                    <div class="promo-badge">
-                        <span class="badge bg-warning text-dark px-3 py-2">
-                            -20%
-                        </span>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <h5 class="card-title text-dark fw-bold">
-                        <i class="fas fa-bolt text-warning"></i>
-                        {{ voiture.modele.marque.nom }} {{ voiture.modele.nom }}
-                    </h5>
-                    <p class="card-text">
-                        <span class="text-decoration-line-through text-muted">
-                            {{ voiture.prix|add:5000 }} €
-                        </span><br>
-                        <strong class="text-danger fs-4">{{ voiture.prix }} €</strong><br>
-                        <span class="badge bg-danger bg-opacity-10 text-danger">
-                            <i class="fas fa-calendar-alt"></i> {{ voiture.annee }}
-                        </span>
-                        <span class="badge bg-danger bg-opacity-10 text-danger ms-1">
-                            <i class="fas fa-road"></i> {{ voiture.kilometrage }} km
-                        </span>
-                    </p>
-                </div>
-                <div class="card-footer bg-white border-top-0">
-                    <a href="{% url 'detail_voiture' voiture.id %}" 
-                       class="btn btn-danger btn-gradient btn-sm w-100 shadow-sm">
-                        <i class="fas fa-gem"></i> Voir l'offre exclusive
-                    </a>
-                </div>
+  <div class="row g-3">
+    {% for voiture in voitures_vedette %}
+      <div class="col-md-6 col-lg-4 col-xl-3">
+        <div class="am-card am-card-hover h-100 overflow-hidden">
+          <div class="ratio ratio-16x9 bg-light">
+            <img class="am-img-cover" src="{{ voiture.image_principale.url }}"
+                 onerror="this.onerror=null;this.src='{% static 'img/placeholder-car.svg' %}';"
+                 alt="{{ voiture.modele.marque.nom }} {{ voiture.modele.nom }}" loading="lazy">
+          </div>
+          <div class="p-3">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div>
+                <div class="fw-semibold">{{ voiture.modele.marque.nom }} {{ voiture.modele.nom }}</div>
+                <div class="small am-muted">{{ voiture.annee }} • {{ voiture.kilometrage|floatformat:0 }} km</div>
+              </div>
+              <div class="fw-semibold text-primary am-price">{{ voiture.prix|fcfa }}</div>
             </div>
+            <div class="d-grid mt-3">
+              <a class="btn btn-outline-primary" href="{% url 'detail_voiture' voiture.id %}">Voir l'annonce</a>
+            </div>
+          </div>
         </div>
-        {% endfor %}
+      </div>
+    {% empty %}
+      <div class="col-12">
+        <div class="alert alert-info mb-0">Aucune voiture disponible pour le moment.</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="am-divider my-5"></div>
+
+  <div class="d-flex align-items-end justify-content-between gap-3 mb-3">
+    <div>
+      <h2 class="h4 mb-1 home-section-title">Marques populaires</h2>
+      <p class="am-muted mb-0">Les marques les plus présentes sur la plateforme.</p>
     </div>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'liste_voitures' %}">Voir tout</a>
+  </div>
+
+  <div class="row g-3">
+    {% for marque in marques_populaires %}
+      <div class="col-6 col-md-3 col-lg-2">
+        <div class="am-card am-card-hover p-3 h-100 text-center">
+          <div class="mb-2">
+            {% if marque.logo %}
+              <img src="{{ marque.logo.url }}" alt="{{ marque.nom }}" style="height:40px; width:auto" loading="lazy">
+            {% else %}
+              <span class="badge text-bg-light am-badge">{{ marque.nom|slice:":1" }}</span>
+            {% endif %}
+          </div>
+          <div class="fw-semibold">{{ marque.nom }}</div>
+          <div class="small am-muted">{{ marque.pays }}</div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="col-12">
+        <div class="alert alert-info mb-0">Aucune marque pour le moment.</div>
+      </div>
+    {% endfor %}
+  </div>
+  <div class="am-divider my-5"></div>
+
+  <section class="mb-4">
+  <div class="d-flex align-items-end justify-content-between gap-3 mb-3">
+    <div>
+      <h2 class="h4 mb-1 home-section-title">Nouveautés</h2>
+      <p class="am-muted mb-0">Les dernières annonces ajoutées.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'liste_voitures' %}">Explorer</a>
+  </div>
+  <div class="row g-3">
+    {% for voiture in voitures_recentes %}
+      <div class="col-md-6 col-lg-4">
+        <div class="am-card am-card-hover h-100 overflow-hidden">
+          <div class="ratio ratio-16x9 bg-light">
+            <img class="am-img-cover" src="{{ voiture.image_principale.url }}"
+                 onerror="this.onerror=null;this.src='{% static 'img/placeholder-car.svg' %}';"
+                 alt="{{ voiture.modele.marque.nom }} {{ voiture.modele.nom }}" loading="lazy">
+          </div>
+          <div class="p-3">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div>
+                <div class="fw-semibold">{{ voiture.modele.marque.nom }} {{ voiture.modele.nom }}</div>
+                <div class="small am-muted">{{ voiture.annee }} • {{ voiture.kilometrage|floatformat:0 }} km</div>
+              </div>
+              <div class="fw-semibold am-price text-primary">{{ voiture.prix|fcfa }}</div>
+            </div>
+            <div class="d-grid mt-3">
+              <a class="btn btn-outline-primary" href="{% url 'detail_voiture' voiture.id %}">
+                Voir l'annonce
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="col-12">
+        <div class="alert alert-info mb-0">Aucune voiture disponible pour le moment.</div>
+      </div>
+    {% endfor %}
+  </div>
+  </section>
+
+  <div class="am-divider my-5"></div>
+
+  <section>
+  <div class="d-flex align-items-end justify-content-between gap-3 mb-3">
+    <div>
+      <h2 class="h4 mb-1 home-section-title">Bonnes affaires</h2>
+      <p class="am-muted mb-0">Des prix attractifs parmi les annonces disponibles.</p>
+    </div>
+  </div>
+  <div class="row g-3">
+    {% for voiture in voitures_promo %}
+      <div class="col-md-6 col-lg-4">
+        <div class="am-card am-card-hover h-100 overflow-hidden">
+          <div class="ratio ratio-16x9 bg-light position-relative">
+            <span class="badge text-bg-warning position-absolute top-0 start-0 m-3">Bon plan</span>
+            <img class="am-img-cover" src="{{ voiture.image_principale.url }}"
+                 onerror="this.onerror=null;this.src='{% static 'img/placeholder-car.svg' %}';"
+                 alt="{{ voiture.modele.marque.nom }} {{ voiture.modele.nom }}" loading="lazy">
+          </div>
+          <div class="p-3">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div>
+                <div class="fw-semibold">{{ voiture.modele.marque.nom }} {{ voiture.modele.nom }}</div>
+                <div class="small am-muted">{{ voiture.annee }} • {{ voiture.kilometrage|floatformat:0 }} km</div>
+              </div>
+              <div class="fw-semibold am-price text-primary">{{ voiture.prix|fcfa }}</div>
+            </div>
+            <div class="d-grid mt-3">
+              <a class="btn btn-outline-primary" href="{% url 'detail_voiture' voiture.id %}">Voir l'annonce</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="col-12">
+        <div class="alert alert-info mb-0">Aucune promotion pour le moment.</div>
+      </div>
+    {% endfor %}
+  </div>
+  </section>
 </section>
-
-<style>
-.hover-card:hover {
-    transform: translateY(-10px);
-    transition: transform 0.3s ease;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
-}
-
-.hover-card:hover .car-image {
-    transform: scale(1.05);
-}
-
-.brand-logo:hover {
-    transform: scale(1.2);
-    transition: transform 0.3s ease;
-}
-
-.bg-gradient-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.promo-card {
-    border: 2px solid #dc3545;
-    animation: borderPulse 2s infinite;
-}
-
-@keyframes borderPulse {
-    0% { border-color: #dc3545; }
-    50% { border-color: #ffc107; }
-    100% { border-color: #dc3545; }
-}
-
-.pulse-button {
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(25, 135, 84, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0); }
-}
-
-.promo-badge {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    animation: bounce 1s infinite alternate;
-}
-
-@keyframes bounce {
-    from { transform: translateY(0); }
-    to { transform: translateY(-10px); }
-}
-
-.btn-gradient {
-    background: linear-gradient(45deg, #ff416c, #ff4b2b);
-    border: none;
-    color: white;
-}
-
-.bg-gradient {
-    background: linear-gradient(45deg, #ff416c, #ff4b2b);
-}
-</style>
 {% endblock %}
